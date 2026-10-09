@@ -281,7 +281,11 @@ internal class OnDeviceSponsorDetector(
                 done += batch.size
                 val stitchStarted = SystemClock.elapsedRealtime()
                 stitched =
-                    stitchSponsorSpans(transcript, windowSpans)
+                    stitchSponsorSpans(
+                        transcript,
+                        windowSpans,
+                        confidenceThreshold = SPONSOR_CONFIDENCE_THRESHOLD,
+                    )
                 stitchMs += SystemClock.elapsedRealtime() - stitchStarted
                 batches++
                 if (firstOrtMs == 0L) firstOrtMs = SystemClock.elapsedRealtime() - started
@@ -343,14 +347,13 @@ internal class OnDeviceSponsorDetector(
                         val output = result[0] as OnnxTensor
                         val outputShape = output.info.shape
                         check(
-                            outputShape.size == 4 &&
+                            outputShape.size == 3 &&
                                 outputShape[0] == batch.size.toLong() &&
                                 outputShape[1] == maxLength.toLong() &&
-                                outputShape[2] == SPONSOR_MODEL_CATEGORIES.size.toLong() &&
-                                outputShape[3] == LABEL_COUNT.toLong(),
+                                outputShape[2] == LABEL_COUNT.toLong(),
                         ) {
                             "Unexpected sponsor model output shape ${outputShape.toList()}, " +
-                                "expected [${batch.size}, $maxLength, ${SPONSOR_MODEL_CATEGORIES.size}, $LABEL_COUNT]"
+                                "expected [${batch.size}, $maxLength, $LABEL_COUNT]"
                         }
                         val decodeStarted = SystemClock.elapsedRealtime()
                         val logits = output.floatBuffer
@@ -358,15 +361,11 @@ internal class OnDeviceSponsorDetector(
                             val sequenceLength = window.offsets.size
                             val windowLogits =
                                 List(sequenceLength) {
-                                    Array(SPONSOR_MODEL_CATEGORIES.size) {
-                                        FloatArray(LABEL_COUNT) { logits.get() }
-                                    }
+                                    FloatArray(LABEL_COUNT) { logits.get() }
                                 }
                             val padding = maxLength - sequenceLength
                             if (padding > 0) {
-                                logits.position(
-                                    logits.position() + padding * SPONSOR_MODEL_CATEGORIES.size * LABEL_COUNT,
-                                )
+                                logits.position(logits.position() + padding * LABEL_COUNT)
                             }
                             val decoded = decodeSponsorBilou(windowLogits, window.offsets)
                             spans +=
@@ -439,7 +438,7 @@ internal class OnDeviceSponsorDetector(
                     session = environment.createSession(modelFile.absolutePath, options)
                     Log.i(TAG, "Sponsor ORT session created in ${SystemClock.elapsedRealtime() - sessionStarted}ms")
                     check(session.inputNames == setOf("input_ids", "attention_mask"))
-                    check(session.outputNames == setOf("segment_logits"))
+                    check(session.outputNames == setOf("logits"))
                     Log.i(
                         TAG,
                         "Sponsor ORT config: batchSize=${config.batchSize} " +

@@ -10,25 +10,22 @@ import java.io.File
  * [MODEL_VERSION] together; older APKs keep working with their old revision.
  */
 internal object SponsorModelConfig {
-    const val HF_REPOSITORY = "CuriousDragon/flow-smart-segments-20261004"
-    const val HF_REVISION = "8fcf7c9a2faaacd3b7d8a5e8b5ddc87247ce1b9f"
-    const val MODEL_VERSION = "curated-category-encoder-ensemble-20261004"
-    const val MODEL_FILE_NAME = "production_multi_head.int8.onnx"
+    const val HF_REPOSITORY = "CuriousDragon/ettin-17m-sponsor-combined-android"
+    const val HF_REVISION = "d4939256c49e92d158429a55fcf39477d003dd58"
+    const val MODEL_VERSION = "combined-android-d493925"
+    const val MODEL_FILE_NAME = "sponsor_detector_combined.int8.ort"
     const val TOKENIZER_FILE_NAME = "tokenizer.json"
-    const val MODEL_BYTES = 58_094_761L
+    const val MODEL_BYTES = 28_973_008L
     const val TOKENIZER_BYTES = 3_583_228L
     const val TOTAL_BYTES = MODEL_BYTES + TOKENIZER_BYTES
 
     val MODEL_PAGE_URL = "https://huggingface.co/$HF_REPOSITORY"
 
     fun resolveUrl(fileName: String): String {
-        val path =
-            when (fileName) {
-                MODEL_FILE_NAME -> "runtime/rank4/$fileName"
-                TOKENIZER_FILE_NAME -> "runtime/$fileName"
-                else -> error("Unknown model asset: $fileName")
-            }
-        return "$MODEL_PAGE_URL/resolve/$HF_REVISION/$path"
+        check(fileName == MODEL_FILE_NAME || fileName == TOKENIZER_FILE_NAME) {
+            "Unknown model asset: $fileName"
+        }
+        return "$MODEL_PAGE_URL/resolve/$HF_REVISION/$fileName"
     }
 }
 

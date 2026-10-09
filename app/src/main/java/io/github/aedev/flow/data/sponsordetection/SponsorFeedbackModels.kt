@@ -4,11 +4,14 @@ import io.github.aedev.flow.data.model.SponsorBlockSegment
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
-const val SPONSOR_MODEL_NAME = "curated_category_encoder_ensemble_20261004"
-const val SPONSOR_MODEL_SHA256 = "4ff3d44f921de64b370745b1c9961d6ab1ab9aee8c703f39b6d6e22b1fdd7d34"
+const val SPONSOR_MODEL_NAME = "ettin_17m_sponsor_combined_int8"
+const val SPONSOR_MODEL_SHA256 = "a710676d38de003310557410b4194566e5156c766d076c1781778034bd778f8f"
 const val SPONSOR_TOKENIZER_SHA256 = "6c8aaa9a542084f2457eab775d4eeb51f92a70c0fd9de28d5edb0ddec3c08d30"
 
-/** Sponsor-head threshold; category decoder thresholds are configured separately. */
+/**
+ * Operating point of the sponsor-only combined model. Calibrated to those weights
+ * and must not be applied to the multi-head checkpoint.
+ */
 const val SPONSOR_CONFIDENCE_THRESHOLD = 0.7
 
 /**
@@ -16,7 +19,7 @@ const val SPONSOR_CONFIDENCE_THRESHOLD = 0.7
  * minimum span, continuity merge, ...). The prediction cache keys on this so a
  * cached result produced by older logic is never replayed against new decoding.
  */
-const val SPONSOR_DECODE_LOGIC_VERSION = 2
+const val SPONSOR_DECODE_LOGIC_VERSION = 3
 
 @Serializable
 data class SponsorPredictedSpan(

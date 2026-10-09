@@ -9,50 +9,35 @@ import org.junit.Test
 
 class SmartSegmentDecoderTest {
     @Test
-    fun `extracts independent category heads and applies fixed category thresholds`() {
+    fun `decodes a sponsor-only BILOU span`() {
         val logits = logits(3)
-        logits[0][0] = tag(1)
-        logits[1][0] = tag(3)
-        logits[0][1] = tag(4)
-        logits[0][2] = tag(4)
+        logits[0] = tag(1)
+        logits[1] = tag(2)
+        logits[2] = tag(3)
 
         val decoded = decodeSponsorBilou(logits, listOf(0 until 6, 6 until 12, 12 until 18))
 
-        assertThat(decoded.map { it.category }).containsExactly("sponsor", "selfpromo", "interaction")
-        assertThat(decoded.map { it.confidence }.distinct()).hasSize(1)
+        assertThat(decoded).hasSize(1)
+        assertThat(decoded.single().category).isEqualTo("sponsor")
+        assertThat(decoded.single().startCodePoint).isEqualTo(0)
+        assertThat(decoded.single().endCodePoint).isEqualTo(18)
     }
 
     @Test
-    fun `closes malformed open spans and starts stray continuation tags`() {
-        val logits = logits(4)
-        logits[0][0] = tag(1)
-        logits[1][0] = tag(2)
-        logits[2][0] = tag(3)
-        logits[3][0] = tag(3)
-
-        val decoded = decodeSponsorBilou(logits, (0 until 4).map { it * 12 until it * 12 + 12 })
-
-        assertThat(decoded.map { it.startCodePoint to it.endCodePoint })
-            .containsExactly(0 to 36, 36 to 48)
-            .inOrder()
-    }
-
-    @Test
-    fun `stitches window overlap without joining separate events or categories`() {
+    fun `stitches overlapping windows into one sponsor span`() {
         val transcript = AssembledSponsorTranscript("x".repeat(100), listOf(CueRange(0, 100, 0, 10_000)))
         val spans =
             listOf(
-                WindowSponsorSpan(0, 10, 22, 0.91, "sponsor"),
-                WindowSponsorSpan(1, 10, 22, 0.88, "sponsor"),
-                WindowSponsorSpan(0, 40, 55, 0.92, "sponsor"),
-                WindowSponsorSpan(0, 10, 22, 0.9, "selfpromo"),
+                WindowSponsorSpan(0, 10, 22, 0.91),
+                WindowSponsorSpan(1, 10, 22, 0.88),
+                WindowSponsorSpan(0, 70, 90, 0.92),
             )
 
         val stitched = stitchSponsorSpans(transcript, spans)
 
-        assertThat(stitched).hasSize(3)
-        assertThat(stitched.map { it.category }).containsExactly("selfpromo", "sponsor", "sponsor").inOrder()
-        assertThat(stitched[0].startMs).isEqualTo(stitched[1].startMs)
+        assertThat(stitched).hasSize(2)
+        assertThat(stitched.map { it.category }).containsExactly("sponsor", "sponsor")
+        assertThat(stitched[0].confidence).isEqualTo(0.91)
     }
 
     @Test
@@ -76,27 +61,27 @@ class SmartSegmentDecoderTest {
     }
 
     @Test
-    fun `normalization retains reserved placeholders when repeated`() {
-        val normalized = normalizeSponsorCue("Visit URL_TOKEN and save NUMBER_TOKEN today")
+    fun `normalization is stable when repeated`() {
+        val normalized = normalizeSponsorCue("Visit https://example.com and save 12 today")
         assertThat(normalizeSponsorCue(normalized)).isEqualTo(normalized)
-        assertThat(normalized).contains("URL_TOKEN")
-        assertThat(normalized).contains("NUMBER_TOKEN")
+        assertThat(normalized).contains("url_token")
+        assertThat(normalized).contains("number_token")
     }
 
     @Test
-    fun `minimum span applies after overlap stitching`() {
+    fun `overlapping windows merge and a later event stays separate`() {
         val transcript = AssembledSponsorTranscript("x".repeat(100), listOf(CueRange(0, 100, 0, 10_000)))
         val spans =
             listOf(
-                WindowSponsorSpan(0, 0, 11, 0.9, "interaction"),
-                WindowSponsorSpan(1, 8, 20, 0.9, "interaction"),
-                WindowSponsorSpan(0, 50, 61, 0.9, "sponsor"),
+                WindowSponsorSpan(0, 0, 11, 0.9),
+                WindowSponsorSpan(1, 8, 20, 0.9),
+                WindowSponsorSpan(0, 50, 61, 0.9),
             )
 
         val stitched = stitchSponsorSpans(transcript, spans)
 
-        assertThat(stitched).hasSize(1)
-        assertThat(stitched.single().category).isEqualTo("interaction")
+        assertThat(stitched).hasSize(2)
+        assertThat(stitched.map { it.category }).containsExactly("sponsor", "sponsor")
     }
 
     @Test
@@ -115,58 +100,34 @@ class SmartSegmentDecoderTest {
     }
 
     @Test
-    fun `continuity merge reunites one sponsor event split by a confidence dropout`() {
-        val transcript = AssembledSponsorTranscript("x".repeat(200), listOf(CueRange(0, 200, 0, 100_000)))
+    fun `nearby sponsor windows merge across the calibrated gap`() {
+        val transcript = AssembledSponsorTranscript("x".repeat(200), listOf(CueRange(0, 200, 0, 10_000)))
         val spans =
             listOf(
-                WindowSponsorSpan(0, 0, 90, 0.97, "sponsor"),
-                WindowSponsorSpan(1, 95, 180, 0.95, "sponsor"),
+                WindowSponsorSpan(0, 0, 40, 0.97),
+                WindowSponsorSpan(1, 50, 90, 0.95),
             )
 
         val stitched = stitchSponsorSpans(transcript, spans)
 
         assertThat(stitched).hasSize(1)
+        assertThat(stitched.single().category).isEqualTo("sponsor")
         assertThat(stitched.single().startMs).isEqualTo(0)
-        assertThat(stitched.single().endMs).isEqualTo(90_000)
     }
 
     @Test
-    fun `continuity merge does not join a large gap`() {
+    fun `a large gap stays two sponsor spans`() {
         val transcript = AssembledSponsorTranscript("x".repeat(200), listOf(CueRange(0, 200, 0, 200_000)))
         val spans =
             listOf(
-                WindowSponsorSpan(0, 0, 40, 0.97, "sponsor"),
-                WindowSponsorSpan(1, 160, 200, 0.95, "sponsor"),
+                WindowSponsorSpan(0, 0, 40, 0.97),
+                WindowSponsorSpan(1, 160, 200, 0.95),
             )
 
         assertThat(stitchSponsorSpans(transcript, spans)).hasSize(2)
     }
 
-    @Test
-    fun `continuity merge never chains two short fragments`() {
-        val transcript = AssembledSponsorTranscript("x".repeat(100), listOf(CueRange(0, 100, 0, 100_000)))
-        val spans =
-            listOf(
-                WindowSponsorSpan(0, 0, 20, 0.97, "sponsor"),
-                WindowSponsorSpan(1, 25, 45, 0.95, "sponsor"),
-            )
-
-        assertThat(stitchSponsorSpans(transcript, spans)).hasSize(2)
-    }
-
-    @Test
-    fun `interaction is left unmerged`() {
-        val transcript = AssembledSponsorTranscript("x".repeat(200), listOf(CueRange(0, 200, 0, 100_000)))
-        val spans =
-            listOf(
-                WindowSponsorSpan(0, 0, 90, 0.9, "interaction"),
-                WindowSponsorSpan(1, 95, 180, 0.9, "interaction"),
-            )
-
-        assertThat(stitchSponsorSpans(transcript, spans)).hasSize(2)
-    }
-
-    private fun logits(sequenceSize: Int): List<Array<FloatArray>> = List(sequenceSize) { Array(SPONSOR_MODEL_CATEGORIES.size) { tag(0) } }
+    private fun logits(sequenceSize: Int): List<FloatArray> = List(sequenceSize) { tag(0) }
 
     private fun tag(tag: Int): FloatArray = FloatArray(5) { if (it == tag) 4f else 0f }
 }

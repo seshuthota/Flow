@@ -48,12 +48,12 @@ class SponsorModelStoreTest {
     @Test
     fun `download URLs pin the released multihead graph and tokenizer`() {
         val prefix =
-            "https://huggingface.co/CuriousDragon/flow-smart-segments-20261004/resolve/" +
-                "8fcf7c9a2faaacd3b7d8a5e8b5ddc87247ce1b9f/"
+            "https://huggingface.co/CuriousDragon/ettin-17m-sponsor-combined-android/resolve/" +
+                "d4939256c49e92d158429a55fcf39477d003dd58/"
         assertThat(SponsorModelConfig.resolveUrl(SponsorModelConfig.MODEL_FILE_NAME))
-            .isEqualTo(prefix + "runtime/rank4/production_multi_head.int8.onnx")
+            .isEqualTo(prefix + "sponsor_detector_combined.int8.ort")
         assertThat(SponsorModelConfig.resolveUrl(SponsorModelConfig.TOKENIZER_FILE_NAME))
-            .isEqualTo(prefix + "runtime/tokenizer.json")
+            .isEqualTo(prefix + "tokenizer.json")
         assertThrows(IllegalStateException::class.java) {
             SponsorModelConfig.resolveUrl("../unknown")
         }
