@@ -412,4 +412,3 @@ private val PREVIOUS_LABELS =
 private val URL_PATTERN = Regex("(?i)\\b(?:https?://|www\\.)\\S+|\\b\\S+\\.(?:com|net|org)\\S*")
 private val NUMBER_PATTERN = Regex("\\b\\d+(?:[.,:]\\d+)*\\b")
 private val WHITESPACE_PATTERN = Regex("\\s+")
-
